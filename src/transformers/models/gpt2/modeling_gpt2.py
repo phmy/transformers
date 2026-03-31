@@ -46,7 +46,8 @@ from ...utils import (
 from ...utils.generic import maybe_autocast, merge_with_config_defaults
 from ...utils.output_capturing import OutputRecorder, capture_outputs
 from .configuration_gpt2 import GPT2Config
-
+import openfhe
+from ... import fhe_utils
 
 logger = logging.get_logger(__name__)
 
@@ -99,12 +100,14 @@ class GPT2Attention(nn.Module):
         if self.scale_attn_by_inverse_layer_idx:
             self.scaling /= float(self.layer_idx + 1)
 
+        cc, keys = fhe_utils.CreateCryptoContextAndKeys()
+
         if self.is_cross_attention:
-            self.c_attn = Conv1D(2 * self.embed_dim, self.embed_dim)
-            self.q_attn = Conv1D(self.embed_dim, self.embed_dim)
+            self.c_attn = Conv1D(2 * self.embed_dim, self.embed_dim, cc, keys)
+            self.q_attn = Conv1D(self.embed_dim, self.embed_dim, cc, keys)
         else:
-            self.c_attn = Conv1D(3 * self.embed_dim, self.embed_dim)
-        self.c_proj = Conv1D(self.embed_dim, self.embed_dim)
+            self.c_attn = Conv1D(3 * self.embed_dim, self.embed_dim, cc, keys)
+        self.c_proj = Conv1D(self.embed_dim, self.embed_dim, cc, keys)
 
         self.attn_dropout = nn.Dropout(config.attn_pdrop)
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
@@ -229,9 +232,10 @@ class GPT2Attention(nn.Module):
 class GPT2MLP(nn.Module):
     def __init__(self, intermediate_size, config):
         super().__init__()
+        cc, keys = fhe_utils.CreateCryptoContextAndKeys()
         embed_dim = config.hidden_size
-        self.c_fc = Conv1D(intermediate_size, embed_dim)
-        self.c_proj = Conv1D(embed_dim, intermediate_size)
+        self.c_fc = Conv1D(intermediate_size, embed_dim, cc, keys)
+        self.c_proj = Conv1D(embed_dim, intermediate_size, cc, keys)
         self.act = ACT2FN[config.activation_function]
         self.dropout = nn.Dropout(config.resid_pdrop)
 
