@@ -20,6 +20,7 @@ from functools import lru_cache, wraps
 import torch
 from safetensors.torch import storage_ptr, storage_size
 from torch import nn
+from . import fhe_utils
 
 from .utils import (
     is_torch_greater_or_equal,
@@ -105,20 +106,23 @@ class Conv1D(nn.Module):
         nx (`int`): The number of input features.
     """
 
-    def __init__(self, nf, nx):
+    def __init__(self, nf, nx, CryptoContext = None, keys = None):
         super().__init__()
         self.nf = nf
         self.nx = nx
         self.weight = nn.Parameter(torch.empty(nx, nf))
         self.bias = nn.Parameter(torch.zeros(nf))
         nn.init.normal_(self.weight, std=0.02)
+        self.CryptoContext = CryptoContext
+        self.keys = keys
 
     def __repr__(self) -> str:
         return "Conv1D(nf={nf}, nx={nx})".format(**self.__dict__)
 
     def forward(self, x):
         size_out = x.size()[:-1] + (self.nf,)
-        x = torch.addmm(self.bias, x.view(-1, x.size(-1)), self.weight)
+        # x = torch.addmm(self.bias, x.view(-1, x.size(-1)), self.weight)
+        x = fhe_utils.Linear(self.bias, x.view(-1, x.size(-1)), self.weight, self.CryptoContext, self.keys)
         x = x.view(size_out)
         return x
 
